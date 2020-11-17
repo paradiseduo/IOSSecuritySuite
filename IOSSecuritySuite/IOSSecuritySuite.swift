@@ -276,5 +276,24 @@ public extension IOSSecuritySuite {
     static func findLoadedDylibs(_ target: IntegrityCheckerImageTarget = .default) -> [String]? {
         return IntegrityChecker.findLoadedDylibs(target)
     }
+    /**
+    This type method is used to determine if there are any breakpoints at the function
+    
+    Usage example
+    ```
+    func denyDebugger() {
+        // add a breakpoint at here to test
+    }
+     
+    typealias FunctionType = @convention(thin) ()->()
+    
+    let func_denyDebugger: FunctionType = denyDebugger   // `: FunctionType` is a must
+    let func_addr = unsafeBitCast(func_denyDebugger, to: UnsafeMutableRawPointer.self)
+    let hasBreakpoint = IOSSecuritySuite.hasBreakpointAt(func_addr, functionSize: nil) ? true : false
+    ```
+    */
+    static func hasBreakpointAt(_ functionAddr: UnsafeRawPointer, functionSize: vm_size_t?) -> Bool {
+        return DebuggerChecker.hasBreakpointAt(functionAddr, functionSize: functionSize)
+    }
 }
  #endif
