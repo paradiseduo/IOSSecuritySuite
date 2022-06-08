@@ -103,11 +103,12 @@ internal class JailbreakChecker {
         return (true, "")
     }
 
+    // "cydia://" URL scheme has been removed. Turns out there is app in the official App Store
+    // that has the cydia:// URL scheme registered, so it may cause false positive
     private static func checkURLSchemes() -> CheckResult {
         var flag: (passed: Bool, failMessage: String) = (true, "")
         let urlSchemes = [
             "undecimus://",
-            "cydia://",
             "sileo://",
             "zbra://",
             "filza://",
@@ -129,6 +130,9 @@ internal class JailbreakChecker {
 
     private static func checkExistenceOfSuspiciousFiles() -> CheckResult {
         var paths = [
+            "/var/mobile/Library/Preferences/ABPattern", // A-Bypass
+            "/usr/lib/ABDYLD.dylib", // A-Bypass,
+            "/usr/lib/ABSubLoader.dylib", // A-Bypass
             "/usr/sbin/frida-server", // frida
             "/etc/apt/sources.list.d/electra.list", // electra
             "/etc/apt/sources.list.d/sileo.sources", // electra
@@ -182,6 +186,9 @@ internal class JailbreakChecker {
             "/usr/lib/libsubstitute.dylib",
             "/usr/lib/substrate",
             "/usr/lib/TweakInject",
+            "/var/binpack/Applications/loader.app", // checkra1n
+            "/Applications/FlyJB.app", // Fly JB X
+            "/Applications/Zebra.app" // Zebra
         ]
         
         // These files can give false positive in the emulator
