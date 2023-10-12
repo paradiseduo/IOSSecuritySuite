@@ -5,55 +5,44 @@
 //  Created by wregula on 23/04/2019.
 //  Copyright © 2019 wregula. All rights reserved.
 //
-//swiftlint:disable cyclomatic_complexity function_body_length type_body_length
+// swiftlint:disable cyclomatic_complexity function_body_length type_body_length trailing_whitespace
 
 import Foundation
 import UIKit
 import Darwin // fork
 import MachO // dyld
-
-public typealias FailedCheck = (check: JailbreakCheck, failMessage: String)
-
-public enum JailbreakCheck: CaseIterable {
-    case urlSchemes
-    case existenceOfSuspiciousFiles
-    case suspiciousFilesCanBeOpened
-    case restrictedDirectoriesWriteable
-    case fork
-    case symbolicLinks
-    case dyld
-}
+import ObjectiveC // NSObject and Selector
 
 internal class JailbreakChecker {
     typealias CheckResult = (passed: Bool, failMessage: String)
-
+    
     struct JailbreakStatus {
         let passed: Bool
         let failMessage: String // Added for backwards compatibility
-        let failedChecks: [FailedCheck]
+        let failedChecks: [FailedCheckType]
     }
-
+    
     static func amIJailbroken() -> Bool {
         return !performChecks().passed
     }
-
+    
     static func amIJailbrokenWithFailMessage() -> (jailbroken: Bool, failMessage: String) {
         let status = performChecks()
         return (!status.passed, status.failMessage)
     }
-
-    static func amIJailbrokenWithFailedChecks() -> (jailbroken: Bool, failedChecks: [FailedCheck]) {
+    
+    static func amIJailbrokenWithFailedChecks() -> (jailbroken: Bool, failedChecks: [FailedCheckType]) {
         let status = performChecks()
         return (!status.passed, status.failedChecks)
     }
-
+    
     private static func performChecks() -> JailbreakStatus {
         var passed = true
         var failMessage = ""
         var result: CheckResult = (true, "")
-        var failedChecks: [FailedCheck] = []
-
-        for check in JailbreakCheck.allCases {
+        var failedChecks: [FailedCheckType] = []
+        
+        for check in FailedCheck.allCases {
             switch check {
             case .urlSchemes:
                 result = checkURLSchemes()
@@ -74,24 +63,28 @@ internal class JailbreakChecker {
                 result = checkSymbolicLinks()
             case .dyld:
                 result = checkDYLD()
+            case .suspiciousObjCClasses:
+                result = checkSuspiciousObjCClasses()
+            default:
+                continue
             }
-
+            
             passed = passed && result.passed
-
+            
             if !result.passed {
                 failedChecks.append((check: check, failMessage: result.failMessage))
-
+                
                 if !failMessage.isEmpty {
                     failMessage += ", "
                 }
             }
-
+            
             failMessage += result.failMessage
         }
-
+        
         return JailbreakStatus(passed: passed, failMessage: failMessage, failedChecks: failedChecks)
     }
-
+    
     private static func canOpenUrlFromList(urlSchemes: [String]) -> CheckResult {
         for urlScheme in urlSchemes {
             if let url = URL(string: urlScheme) {
@@ -102,11 +95,10 @@ internal class JailbreakChecker {
         }
         return (true, "")
     }
-
+    
     // "cydia://" URL scheme has been removed. Turns out there is app in the official App Store
     // that has the cydia:// URL scheme registered, so it may cause false positive
     private static func checkURLSchemes() -> CheckResult {
-        var flag: (passed: Bool, failMessage: String) = (true, "")
         let urlSchemes = [
             "undecimus://",
             "sileo://",
@@ -114,20 +106,9 @@ internal class JailbreakChecker {
             "filza://",
             "activator://"
         ]
-
-        if Thread.isMainThread {
-            flag = canOpenUrlFromList(urlSchemes: urlSchemes)
-        } else {
-            let semaphore = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async {
-                flag = canOpenUrlFromList(urlSchemes: urlSchemes)
-                semaphore.signal()
-            }
-            semaphore.wait()
-        }
-        return flag
+        return canOpenUrlFromList(urlSchemes: urlSchemes)
     }
-
+    
     private static func checkExistenceOfSuspiciousFiles() -> CheckResult {
         var paths = [
             "/var/mobile/Library/Preferences/ABPattern", // A-Bypass
@@ -182,39 +163,54 @@ internal class JailbreakChecker {
             "/Library/PreferenceBundles/ShadowPreferences.bundle",
             "/Library/PreferenceBundles/ABypassPrefs.bundle",
             "/Library/PreferenceBundles/FlyJBPrefs.bundle",
+            "/Library/PreferenceBundles/Cephei.bundle",
+            "/Library/PreferenceBundles/SubstitutePrefs.bundle",
+            "/Library/PreferenceBundles/libhbangprefs.bundle",
             "/usr/lib/libhooker.dylib",
             "/usr/lib/libsubstitute.dylib",
             "/usr/lib/substrate",
             "/usr/lib/TweakInject",
             "/var/binpack/Applications/loader.app", // checkra1n
             "/Applications/FlyJB.app", // Fly JB X
-            "/Applications/Zebra.app" // Zebra
+            "/Applications/Zebra.app", // Zebra
+            "/Library/BawAppie/ABypass", // ABypass
+            "/Library/MobileSubstrate/DynamicLibraries/SSLKillSwitch2.plist", // SSL Killswitch
+            "/Library/MobileSubstrate/DynamicLibraries/PreferenceLoader.plist", // PreferenceLoader
+            "/Library/MobileSubstrate/DynamicLibraries/PreferenceLoader.dylib", // PreferenceLoader
+            "/Library/MobileSubstrate/DynamicLibraries", // DynamicLibraries directory in general
+            "/var/mobile/Library/Preferences/me.jjolano.shadow.plist"
         ]
         
         // These files can give false positive in the emulator
         if !EmulatorChecker.amIRunInEmulator() {
             paths += [
-            "/bin/bash",
-            "/usr/sbin/sshd",
-            "/usr/libexec/ssh-keysign",
-            "/bin/sh",
-            "/etc/ssh/sshd_config",
-            "/usr/libexec/sftp-server",
-            "/usr/bin/ssh"
+                "/bin/bash",
+                "/usr/sbin/sshd",
+                "/usr/libexec/ssh-keysign",
+                "/bin/sh",
+                "/etc/ssh/sshd_config",
+                "/usr/libexec/sftp-server",
+                "/usr/bin/ssh"
             ]
         }
-
+        
         for path in paths {
             if FileManager.default.fileExists(atPath: path) {
                 return (false, "Suspicious file exists: \(path)")
+            } else if let result = FileChecker.checkExistenceOfSuspiciousFilesViaStat(path: path) {
+                return result
+            } else if let result = FileChecker.checkExistenceOfSuspiciousFilesViaFOpen(path: path, mode: .readable) {
+                return result
+            } else if let result = FileChecker.checkExistenceOfSuspiciousFilesViaAccess(path: path, mode: .readable) {
+                return result
             }
         }
-
+        
         return (true, "")
     }
-
+    
     private static func checkSuspiciousFilesCanBeOpened() -> CheckResult {
-
+        
         var paths = [
             "/.installed_unc0ver",
             "/.bootstrapped_electra",
@@ -227,31 +223,43 @@ internal class JailbreakChecker {
         // These files can give false positive in the emulator
         if !EmulatorChecker.amIRunInEmulator() {
             paths += [
-            "/bin/bash",
-            "/usr/sbin/sshd",
-            "/usr/bin/ssh"
+                "/bin/bash",
+                "/usr/sbin/sshd",
+                "/usr/bin/ssh"
             ]
         }
-
+        
         for path in paths {
-
+            
             if FileManager.default.isReadableFile(atPath: path) {
                 return (false, "Suspicious file can be opened: \(path)")
+            } else if let result = FileChecker.checkExistenceOfSuspiciousFilesViaFOpen(path: path, mode: .writable) {
+                return result
+            } else if let result = FileChecker.checkExistenceOfSuspiciousFilesViaAccess(path: path, mode: .writable) {
+                return result
             }
         }
-
+        
         return (true, "")
     }
-
+    
     private static func checkRestrictedDirectoriesWriteable() -> CheckResult {
-
+        
         let paths = [
             "/",
             "/root/",
             "/private/",
             "/jb/"
         ]
-
+        
+        if FileChecker.checkRestrictedPathIsReadonlyViaStatvfs(path: "/") == false {
+            return (false, "Restricted path '/' is not Read-Only")
+        } else if FileChecker.checkRestrictedPathIsReadonlyViaStatfs(path: "/") == false {
+            return (false, "Restricted path '/' is not Read-Only")
+        } else if FileChecker.checkRestrictedPathIsReadonlyViaGetfsstat(name: "/") == false {
+            return (false, "Restricted path '/' is not Read-Only")
+        }
+        
         // If library won't be able to write to any restricted directory the return(false, ...) is never reached
         // because of catch{} statement
         for path in paths {
@@ -262,30 +270,30 @@ internal class JailbreakChecker {
                 return (false, "Wrote to restricted path: \(path)")
             } catch {}
         }
-
+        
         return (true, "")
     }
-
+    
     private static func checkFork() -> CheckResult {
-
+        
         let pointerToFork = UnsafeMutableRawPointer(bitPattern: -2)
         let forkPtr = dlsym(pointerToFork, "fork")
         typealias ForkType = @convention(c) () -> pid_t
         let fork = unsafeBitCast(forkPtr, to: ForkType.self)
         let forkResult = fork()
-
+        
         if forkResult >= 0 {
             if forkResult > 0 {
                 kill(forkResult, SIGTERM)
             }
             return (false, "Fork was able to create a new process (sandbox violation)")
         }
-
+        
         return (true, "")
     }
-
+    
     private static func checkSymbolicLinks() -> CheckResult {
-
+        
         let paths = [
             "/var/lib/undecimus/apt", // unc0ver
             "/Applications",
@@ -296,7 +304,7 @@ internal class JailbreakChecker {
             "/usr/libexec",
             "/usr/share"
         ]
-
+        
         for path in paths {
             do {
                 let result = try FileManager.default.destinationOfSymbolicLink(atPath: path)
@@ -305,12 +313,12 @@ internal class JailbreakChecker {
                 }
             } catch {}
         }
-
+        
         return (true, "")
     }
-
+    
     private static func checkDYLD() -> CheckResult {
-
+        
         let suspiciousLibraries = [
             "SubstrateLoader.dylib",
             "SSLKillSwitch2.dylib",
@@ -332,20 +340,36 @@ internal class JailbreakChecker {
             "Substitute",
             "Cephei",
             "Electra",
+            "AppSyncUnified-FrontBoard.dylib",
+            "Shadow",
+            "FridaGadget",
+            "frida",
+            "libcycript"
         ]
-
+        
         for libraryIndex in 0..<_dyld_image_count() {
-
+            
             // _dyld_get_image_name returns const char * that needs to be casted to Swift String
             guard let loadedLibrary = String(validatingUTF8: _dyld_get_image_name(libraryIndex)) else { continue }
-
+            
             for suspiciousLibrary in suspiciousLibraries {
                 if loadedLibrary.lowercased().contains(suspiciousLibrary.lowercased()) {
-                    return(false, "Suspicious library loaded: \(loadedLibrary)")
+                    return (false, "Suspicious library loaded: \(loadedLibrary)")
                 }
             }
         }
-
+        
+        return (true, "")
+    }
+    
+    private static func checkSuspiciousObjCClasses() -> CheckResult {
+        
+        if let shadowRulesetClass = objc_getClass("ShadowRuleset") as? NSObject.Type {
+            let selector = Selector(("internalDictionary"))
+            if class_getInstanceMethod(shadowRulesetClass, selector) != nil {
+                return (false, "Shadow anti-anti-jailbreak detector detected :-)")
+            }
+        }
         return (true, "")
     }
 }

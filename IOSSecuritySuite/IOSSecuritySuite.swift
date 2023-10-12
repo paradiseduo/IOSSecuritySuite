@@ -5,7 +5,7 @@
 //  Created by wregula on 23/04/2019.
 //  Copyright © 2019 wregula. All rights reserved.
 //
-//swiftlint:disable line_length
+// swiftlint:disable line_length trailing_whitespace
 
 import Foundation
 import MachO
@@ -61,7 +61,7 @@ public class IOSSecuritySuite {
      - Returns: Tuple with with the jailbreak status *Bool* labeled *jailbroken* and *[FailedCheck]* labeled *failedChecks*
      for the list of failed checks
      */
-    public static func amIJailbrokenWithFailedChecks() -> (jailbroken: Bool, failedChecks: [FailedCheck]) {
+    public static func amIJailbrokenWithFailedChecks() -> (jailbroken: Bool, failedChecks: [FailedCheckType]) {
         return JailbreakChecker.amIJailbrokenWithFailedChecks()
     }
 
@@ -102,6 +102,19 @@ public class IOSSecuritySuite {
     }
     
     /**
+     This method is used to determine if application was launched by something
+     other than LaunchD (i.e. the app was launched by a debugger)
+     
+     Usage example
+     ```
+     let isNotLaunchD: Bool = IOSSecuritySuite.isParentPidUnexpected()
+     ```
+     */
+    public static func isParentPidUnexpected() -> Bool {
+        return DebuggerChecker.isParentPidUnexpected()
+    }
+    
+    /**
     This type method is used to determine if application has been tampered with
     
     Usage example
@@ -132,7 +145,26 @@ public class IOSSecuritySuite {
     public static func amIReverseEngineered() -> Bool {
         return ReverseEngineeringToolsChecker.amIReverseEngineered()
     }
-    
+  
+    /**
+    This type method is used to determine the reverse engineered status with a list of failed checks
+
+     Usage example
+     ```
+     let reStatus = IOSSecuritySuite.amIReverseEngineeredWithFailedChecks()
+     if reStatus.reverseEngineered {
+        print("This device has evidence of reverse engineering")
+        print("The following checks failed: \(reStatus.failedChecks)")
+     }
+     ```
+
+     - Returns: Tuple with with the reverse engineered status *Bool* labeled *reverseEngineered* and *[FailedCheck]* labeled *failedChecks*
+     for the list of failed checks
+     */
+    public static func amIReverseEngineeredWithFailedChecks() -> (reverseEngineered: Bool, failedChecks: [FailedCheckType]) {
+        return ReverseEngineeringToolsChecker.amIReverseEngineeredWithFailedChecks()
+    }
+      
     /**
     This type method is used to determine if `objc call` has been RuntimeHooked by for example `Flex`
      
