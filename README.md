@@ -46,9 +46,20 @@ After adding ISS to your project, you will also need to update your main Info.pl
     <string>sileo</string>
     <string>zbra</string>
     <string>filza</string>
-    <string>activator</string>
 </array>
 ```
+
+### Pricing
+
+Check our EULA license for the details.
+
+TLDR:
+If your company employs:
+* 0-99 people - **free to use**
+* 100-1000 - 3k EUR/year
+* 1000+ - 10k EUR/year
+
+If you want to sell a module that uses the iOS Security Suite (it is not used directly in your app) - 10k EUR/year
 
 ### Notice
 
@@ -130,8 +141,15 @@ if reverseStatus.reverseEngineered {
 ```
 
 ### System proxy detector module
+
+Now you can also detect if an app is connected to VPN
 ```Swift
-let amIProxied: Bool = IOSSecuritySuite.amIProxied()
+let amIProxied: Bool = IOSSecuritySuite.amIProxied(considerVPNConnectionAsProxy: true)
+```
+
+### Lockdown mode detector module
+```Swift
+let amIInLockdownMode: Bool = IOSSecuritySuite.amIInLockdownMode()
 ```
 
 ## Experimental features
@@ -285,6 +303,7 @@ Yes, please! If you have a better idea or you just want to improve this project,
 * [sanu](https://github.com/sanu) for new providing new file checks
 * [marsepu](https://github.com/marsepu) for a well-done PR with new improvements
 * [mkj-is](https://github.com/mkj-is) for a PR improving ISS performance 🚄
+* [LongXiangGuo](https://github.com/LongXiangGuo) for a PR adding the privacy manifest
 
 
 ## TODO
